@@ -111,6 +111,7 @@ pushcli(void)
   if(mycpu()->ncli == 0)
     mycpu()->intena = eflags & FL_IF;
   mycpu()->ncli += 1;
+  
 }
 
 void

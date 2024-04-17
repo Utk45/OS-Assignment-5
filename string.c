@@ -44,7 +44,6 @@ memmove(void *dst, const void *src, uint n)
   } else
     while(n-- > 0)
       *d++ = *s++;
-
   return dst;
 }
 

@@ -9,6 +9,8 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+typedef uint pte_t;
+
 
 // bio.c
 void            binit(void);
@@ -121,7 +123,8 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
-void            print_rss(void);
+void             print_rss(void);
+struct proc * findvictimproc();
 
 // swtch.S
 void            swtch(struct context**, struct context*);
@@ -179,14 +182,45 @@ pde_t*          setupkvm(void);
 char*           uva2ka(pde_t*, char*);
 int             allocuvm(pde_t*, uint, uint);
 int             deallocuvm(pde_t*, uint, uint);
+int             deallocuvm2(pde_t*, uint, uint);
 void            freevm(pde_t*);
+void            freevm2(pde_t*);
 void            inituvm(pde_t*, char*, uint);
 int             loaduvm(pde_t*, char*, struct inode*, uint, uint);
-pde_t*          copyuvm(pde_t*, uint);
+pde_t*          copyuvm(pde_t*, uint, struct proc*);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+pte_t*   walkpgdir(pde_t *pgdir, const void *va, int alloc);
+
+// pageswap.c
+struct swap_slot {
+  int page_perm;  // Permission of the swapped memory page
+  int is_free;    // Indicates if the swap slot is free (1) or not (0)
+  uint pid;
+};
+void printSlots();
+// struct swap_slot slotsList[300];
+
+void initswaplist();
+struct vicpage{
+    pte_t *pte;
+    char *page;
+    uint pid;
+};
+struct vicpage findvictimpage();
+uint getFreeSwapSlot();
+char* swapout();
+char * swapin(uint slot);
+void freeSwapSlot(uint slot);
+void cleanSwap(struct proc* p);
+void pagefault_handler();
+
+
+// mkfs.c
+void wsect(uint, void*);
+void rsect(uint sec, void *buf);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

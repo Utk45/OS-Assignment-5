@@ -65,10 +65,10 @@ void
 kfree(char *v)
 {
   struct run *r;
-
-  if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+  if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP){
     panic("kfree");
-
+  }  
+  
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
 
@@ -101,7 +101,12 @@ kalloc(void)
     
   if(kmem.use_lock)
     release(&kmem.lock);
-  return (char*)r;
+  if(r){
+    return (char*)r;
+  }
+  char* p = swapout();
+  kfree(p);
+  return kalloc();
 }
 uint 
 num_of_FreePages(void)

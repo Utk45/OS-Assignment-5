@@ -19,6 +19,8 @@ struct superblock {
   uint logstart;     // Block number of first log block
   uint inodestart;   // Block number of first inode block
   uint bmapstart;    // Block number of first free map block
+  uint nswapstart;
+  uint nswaps;
 };
 
 #define NDIRECT 12
@@ -54,4 +56,9 @@ struct dirent {
   ushort inum;
   char name[DIRSIZ];
 };
+
+// struct swap_slot {
+//   int page_perm;  // Permission of the swapped memory page
+//   int is_free;    // Indicates if the swap slot is free (1) or not (0)
+// };
 

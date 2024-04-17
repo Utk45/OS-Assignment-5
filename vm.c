@@ -32,7 +32,7 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
-static pte_t *
+pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
@@ -42,8 +42,10 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   if(*pde & PTE_P){
     pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
   } else {
+    // cprintf("walkpgdir: pde is not present\n");
     if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
       return 0;
+    
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
     // The permissions here are overly generous, but they can
@@ -232,6 +234,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   a = PGROUNDUP(oldsz);
   for(; a < newsz; a += PGSIZE){
     mem = kalloc();
+    myproc()->rss += PGSIZE;  
     if(mem == 0){
       cprintf("allocuvm out of memory\n");
       deallocuvm(pgdir, newsz, oldsz);
@@ -273,6 +276,39 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
       char *v = P2V(pa);
       kfree(v);
       *pte = 0;
+      if(myproc()->rss > 0)
+        myproc()->rss -= PGSIZE;
+    }else if((*pte & (0x200))){
+      uint slot = (*pte) >> 12;
+      freeSwapSlot(slot);
+      *pte = 0;
+    }
+  }
+  return newsz;
+}
+
+
+int
+deallocuvm2(pde_t *pgdir, uint oldsz, uint newsz)
+{
+  pte_t *pte;
+  uint a, pa;
+
+  if(newsz >= oldsz)
+    return oldsz;
+
+  a = PGROUNDUP(newsz);
+  for(; a  < oldsz; a += PGSIZE){
+    pte = walkpgdir(pgdir, (char*)a, 0);
+    if(!pte)
+      a = PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
+    else if((*pte & PTE_P) != 0){
+      pa = PTE_ADDR(*pte);
+      if(pa == 0)
+        panic("kfree");
+      char *v = P2V(pa);
+      kfree(v);
+      *pte = 0;
     }
   }
   return newsz;
@@ -288,6 +324,24 @@ freevm(pde_t *pgdir)
   if(pgdir == 0)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, KERNBASE, 0);
+  for(i = 0; i < NPDENTRIES; i++){
+    if(pgdir[i] & PTE_P){
+      char * v = P2V(PTE_ADDR(pgdir[i]));
+      kfree(v);
+    }
+  }
+  kfree((char*)pgdir);
+
+}
+
+void
+freevm2(pde_t *pgdir)
+{
+  uint i;
+
+  if(pgdir == 0)
+    panic("freevm: no pgdir");
+  deallocuvm2(pgdir, KERNBASE, 0);
   for(i = 0; i < NPDENTRIES; i++){
     if(pgdir[i] & PTE_P){
       char * v = P2V(PTE_ADDR(pgdir[i]));
@@ -313,7 +367,7 @@ clearpteu(pde_t *pgdir, char *uva)
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
-copyuvm(pde_t *pgdir, uint sz)
+copyuvm(pde_t *pgdir, uint sz, struct proc *child_p)
 {
   pde_t *d;
   pte_t *pte;
@@ -332,6 +386,7 @@ copyuvm(pde_t *pgdir, uint sz)
     if((mem = kalloc()) == 0)
       goto bad;
     memmove(mem, (char*)P2V(pa), PGSIZE);
+    child_p->rss += PGSIZE;
     if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
       kfree(mem);
       goto bad;

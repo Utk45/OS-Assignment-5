@@ -17,6 +17,7 @@
 
 #define NINODES 200
 
+
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
 
@@ -25,12 +26,16 @@ int ninodeblocks = NINODES / IPB + 1;
 int nlog = LOGSIZE;
 int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
 int nblocks;  // Number of data blocks
+int nswaps = NSLOTS * SLOT_SIZE;
+
+
 
 int fsfd;
 struct superblock sb;
 char zeroes[BSIZE];
 uint freeinode = 1;
 uint freeblock;
+
 
 
 void balloc(int);
@@ -64,6 +69,8 @@ xint(uint x)
   return y;
 }
 
+
+
 int
 main(int argc, char *argv[])
 {
@@ -91,16 +98,19 @@ main(int argc, char *argv[])
   }
 
   // 1 fs block = 1 disk sector
-  nmeta = 2 + nlog + ninodeblocks + nbitmap;
+  nmeta = 2 + nswaps + nlog + ninodeblocks + nbitmap;
   nblocks = FSSIZE - nmeta;
 
   sb.size = xint(FSSIZE);
   sb.nblocks = xint(nblocks);
   sb.ninodes = xint(NINODES);
   sb.nlog = xint(nlog);
-  sb.logstart = xint(2);
-  sb.inodestart = xint(2+nlog);
-  sb.bmapstart = xint(2+nlog+ninodeblocks);
+  sb.nswaps = xint(nswaps);
+  sb.nswapstart = xint(2); // Swap blocks start right after superblock
+  sb.logstart = xint(2 + nswaps); // Log blocks start after swap blocks
+  sb.inodestart = xint(2+nlog+nswaps);
+  sb.bmapstart = xint(2+nlog+ninodeblocks+nswaps);
+
 
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
          nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
@@ -163,7 +173,7 @@ main(int argc, char *argv[])
   winode(rootino, &din);
 
   balloc(freeblock);
-
+  //initswaplist();
   exit(0);
 }
 
